@@ -1,22 +1,11 @@
----
-title: |
-  |
-  | Predicted price Analysis
-author: 
-  <p style="font-size:14px;"> <u>Author:</u> Mohamed El-Sayyad </p>
-date: "26 April 2022"
-output: 
-  html_document:
-    keep_md: yes
-    number_sections: FALSE
-    code_folding: hide
-    css: style.css
-    toc: TRUE
-    toc_float: TRUE
----
+Predicted price Analysis
+================
+<p style="font-size:14px;">
+<u>Author:</u> Mohamed El-Sayyad
+</p>
+26 April 2022
 
-
-```r
+``` r
 library(tidyverse, quietly = T)
 library(echarts4r)
 library(magrittr)
@@ -25,37 +14,30 @@ library(gridExtra)
 library(tidymodels)
 ```
 
-<style type="text/css">
-
-h1, #TOC>ul>li {
-  color: #B6854D;
-  font-family:  "Times";
-  font-weight: bold;
-}
-
-h2, #TOC>ul>ul>li {
-  color: #F4B5BD;
-  font-family:  "Times";
-  font-weight: bold;
-}
-
-</style>
-
-
-
 # Background
 
-This is a project done on a data set of a mobility company that offers rides in Europe.
+This is a project done on a data set of a mobility company that offers
+rides in Europe.
 
-The key aspect of ride-hailing is predicted (upfront) pricing, which works the following way. First, it predicts the price for a ride based on predicted distance and time. This price is what you see on the screen of the phone before ordering a ride. Second, if the metered price based on actual distance and time differs a lot from the predicted one, the upfront price switches to the metered price. 'A lot' means by more than 20%. For example, suppose you want to make a ride that upfront price predicts to cost 5 euros. If the metered price is between 4 and 6 euros - the rider pays 5 euros, otherwise the metered price. 
-The aim of the project is to improve the upfront pricing precision. The data is analyzed below to identify top opportunities for that highlighting the top opportunities to be prioritized.
+The key aspect of ride-hailing is predicted (upfront) pricing, which
+works the following way. First, it predicts the price for a ride based
+on predicted distance and time. This price is what you see on the screen
+of the phone before ordering a ride. Second, if the metered price based
+on actual distance and time differs a lot from the predicted one, the
+upfront price switches to the metered price. ‘A lot’ means by more than
+20%. For example, suppose you want to make a ride that upfront price
+predicts to cost 5 euros. If the metered price is between 4 and 6 euros
+- the rider pays 5 euros, otherwise the metered price. The aim of the
+project is to improve the upfront pricing precision. The data is
+analyzed below to identify top opportunities for that highlighting the
+top opportunities to be prioritized.
 
 # EDA - Exploratory Data Analysis
 
-In this part I'll explore the data, investigate for patterns and aim to reach to a conclusion.
+In this part I’ll explore the data, investigate for patterns and aim to
+reach to a conclusion.
 
-
-```r
+``` r
 ## Reading Data
 df_raw = read.csv('data.csv')
 df = df_raw
@@ -65,19 +47,29 @@ df = df_raw
 
 ### Duplicates
 
-Noticed that the `order_id` which represents the driver ticket is duplicated for `ticket_id_new` customer support ticket, meaning that a customer can open multiple tickets against an order.
+Noticed that the `order_id` which represents the driver ticket is
+duplicated for `ticket_id_new` customer support ticket, meaning that a
+customer can open multiple tickets against an order.
 
-Checking for duplicate rows returns 0 duplicates obviously as we have the `ticket_id` being unique.
+Checking for duplicate rows returns 0 duplicates obviously as we have
+the `ticket_id` being unique.
 
-So there are two ways I'd use to check for the duplicates:
+So there are two ways I’d use to check for the duplicates:
 
-1.  <u>**Customer ticket duplicates:**</u> Check for the duplicates against the new ticket `order_id_new`. This returned **777** duplicates.
-2.  <u>**whole data frame excluding customer ticket:**</u> Exclude the `ticket_id` and check for duplicate rows. This returned **673** duplicates.
+1.  <u>**Customer ticket duplicates:**</u> Check for the duplicates
+    against the new ticket `order_id_new`. This returned **777**
+    duplicates.
+2.  <u>**whole data frame excluding customer ticket:**</u> Exclude the
+    `ticket_id` and check for duplicate rows. This returned **673**
+    duplicates.
 
-After a multiple trials, and to avoid confusion, I'll choose the 1st way after ordering the dataframe with `created time`, `order id` and `ticket id`, keeping the most recent tickets. I've removed **777** duplicates, having a dataframe of **4166** instead of **4943** observations.
+After a multiple trials, and to avoid confusion, I’ll choose the 1st way
+after ordering the dataframe with `created time`, `order id` and
+`ticket id`, keeping the most recent tickets. I’ve removed **777**
+duplicates, having a dataframe of **4166** instead of **4943**
+observations.
 
-
-```r
+``` r
 df = df %>% arrange(calc_created, order_id_new, ticket_id_new)
 
 # Checking on duplicates by order id 777
@@ -94,23 +86,22 @@ df = df[!(df$ticket_id_new %in% dup_order $ticket_id_new),]
 
 ### Mismatches
 
-I'm having **46** mismatches between `order_id_new` and `order_try_id_new` .. I'm not sure the reason and the documentation is putting the same definition for both columns, but it seems the order id numbers overlap for a reason.
+I’m having **46** mismatches between `order_id_new` and
+`order_try_id_new` .. I’m not sure the reason and the documentation is
+putting the same definition for both columns, but it seems the order id
+numbers overlap for a reason.
 
-
-```r
+``` r
 print(df %>% filter(order_id_new != order_try_id_new) %>% nrow(.))
 ```
 
-```
-[1] 46
-```
+    [1] 46
 
 ### Missing values
 
 The below are the missing values after removing the duplicates.
 
-
-```r
+``` r
 (colMeans(is.na(df)) * 100) %>% 
   round(.,3) %>% 
   as.data.frame() %>% 
@@ -129,55 +120,100 @@ The below are the missing values after removing the duplicates.
   column_spec(1:1, bold = T, color = "black", background = "#e3fded")
 ```
 
-<table class=" lightable-minimal table" style='font-family: "Trebuchet MS", verdana, sans-serif; margin-left: auto; margin-right: auto; width: auto !important; margin-left: auto; margin-right: auto;'>
-<caption>Missing values</caption>
- <thead>
-  <tr>
-   <th style="text-align:left;"> columns </th>
-   <th style="text-align:right;"> missing_perc </th>
-   <th style="text-align:right;"> count </th>
-  </tr>
- </thead>
+<table class=" lightable-minimal table" style="font-family: &quot;Trebuchet MS&quot;, verdana, sans-serif; margin-left: auto; margin-right: auto; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>
+Missing values
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+columns
+</th>
+<th style="text-align:right;">
+missing_perc
+</th>
+<th style="text-align:right;">
+count
+</th>
+</tr>
+</thead>
 <tbody>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> device_token </td>
-   <td style="text-align:right;"> 100.000 </td>
-   <td style="text-align:right;"> 4166 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> fraud_score </td>
-   <td style="text-align:right;"> 53.721 </td>
-   <td style="text-align:right;"> 2238 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> upfront_price </td>
-   <td style="text-align:right;"> 29.285 </td>
-   <td style="text-align:right;"> 1220 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> metered_price </td>
-   <td style="text-align:right;"> 0.456 </td>
-   <td style="text-align:right;"> 19 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> predicted_distance </td>
-   <td style="text-align:right;"> 0.456 </td>
-   <td style="text-align:right;"> 19 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;"> predicted_duration </td>
-   <td style="text-align:right;"> 0.456 </td>
-   <td style="text-align:right;"> 19 </td>
-  </tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+device_token
+</td>
+<td style="text-align:right;">
+100.000
+</td>
+<td style="text-align:right;">
+4166
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+fraud_score
+</td>
+<td style="text-align:right;">
+53.721
+</td>
+<td style="text-align:right;">
+2238
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+upfront_price
+</td>
+<td style="text-align:right;">
+29.285
+</td>
+<td style="text-align:right;">
+1220
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+metered_price
+</td>
+<td style="text-align:right;">
+0.456
+</td>
+<td style="text-align:right;">
+19
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+predicted_distance
+</td>
+<td style="text-align:right;">
+0.456
+</td>
+<td style="text-align:right;">
+19
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;color: black !important;background-color: #e3fded !important;">
+predicted_duration
+</td>
+<td style="text-align:right;">
+0.456
+</td>
+<td style="text-align:right;">
+19
+</td>
+</tr>
 </tbody>
 </table>
 
 ## Univariate analysis
 
-Briefly inspecting prices, durations and distances I can notice that data will be skewed, a higher variance in certain columns along with outliers.
+Briefly inspecting prices, durations and distances I can notice that
+data will be skewed, a higher variance in certain columns along with
+outliers.
 
-
-```r
+``` r
 psych::describe(df %>% 
           select(duration, distance, predicted_duration, predicted_distance, upfront_price, metered_price)
         ) %>% 
@@ -185,133 +221,329 @@ psych::describe(df %>%
   kable_paper()
 ```
 
-<table class=" lightable-paper" style='font-family: "Arial Narrow", arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;'>
- <thead>
-  <tr>
-   <th style="text-align:left;">   </th>
-   <th style="text-align:right;"> vars </th>
-   <th style="text-align:right;"> n </th>
-   <th style="text-align:right;"> mean </th>
-   <th style="text-align:right;"> sd </th>
-   <th style="text-align:right;"> median </th>
-   <th style="text-align:right;"> trimmed </th>
-   <th style="text-align:right;"> mad </th>
-   <th style="text-align:right;"> min </th>
-   <th style="text-align:right;"> max </th>
-   <th style="text-align:right;"> range </th>
-   <th style="text-align:right;"> skew </th>
-   <th style="text-align:right;"> kurtosis </th>
-   <th style="text-align:right;"> se </th>
-  </tr>
- </thead>
+<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+vars
+</th>
+<th style="text-align:right;">
+n
+</th>
+<th style="text-align:right;">
+mean
+</th>
+<th style="text-align:right;">
+sd
+</th>
+<th style="text-align:right;">
+median
+</th>
+<th style="text-align:right;">
+trimmed
+</th>
+<th style="text-align:right;">
+mad
+</th>
+<th style="text-align:right;">
+min
+</th>
+<th style="text-align:right;">
+max
+</th>
+<th style="text-align:right;">
+range
+</th>
+<th style="text-align:right;">
+skew
+</th>
+<th style="text-align:right;">
+kurtosis
+</th>
+<th style="text-align:right;">
+se
+</th>
+</tr>
+</thead>
 <tbody>
-  <tr>
-   <td style="text-align:left;"> duration </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 4166 </td>
-   <td style="text-align:right;"> 1488.744 </td>
-   <td style="text-align:right;"> 1586.8351 </td>
-   <td style="text-align:right;"> 1019.50 </td>
-   <td style="text-align:right;"> 1200.3677 </td>
-   <td style="text-align:right;"> 773.17590 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 22402.0 </td>
-   <td style="text-align:right;"> 22402.0 </td>
-   <td style="text-align:right;"> 3.848786 </td>
-   <td style="text-align:right;"> 26.62599 </td>
-   <td style="text-align:right;"> 24.58511 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> distance </td>
-   <td style="text-align:right;"> 2 </td>
-   <td style="text-align:right;"> 4166 </td>
-   <td style="text-align:right;"> 9482.639 </td>
-   <td style="text-align:right;"> 10763.0546 </td>
-   <td style="text-align:right;"> 6918.50 </td>
-   <td style="text-align:right;"> 7720.7975 </td>
-   <td style="text-align:right;"> 5584.95420 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 233190.0 </td>
-   <td style="text-align:right;"> 233190.0 </td>
-   <td style="text-align:right;"> 5.948785 </td>
-   <td style="text-align:right;"> 76.25401 </td>
-   <td style="text-align:right;"> 166.75386 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> predicted_duration </td>
-   <td style="text-align:right;"> 3 </td>
-   <td style="text-align:right;"> 4147 </td>
-   <td style="text-align:right;"> 1082.257 </td>
-   <td style="text-align:right;"> 816.1494 </td>
-   <td style="text-align:right;"> 916.00 </td>
-   <td style="text-align:right;"> 981.6755 </td>
-   <td style="text-align:right;"> 548.56200 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 20992.0 </td>
-   <td style="text-align:right;"> 20992.0 </td>
-   <td style="text-align:right;"> 7.586889 </td>
-   <td style="text-align:right;"> 143.86503 </td>
-   <td style="text-align:right;"> 12.67368 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> predicted_distance </td>
-   <td style="text-align:right;"> 4 </td>
-   <td style="text-align:right;"> 4147 </td>
-   <td style="text-align:right;"> 8758.413 </td>
-   <td style="text-align:right;"> 11101.8562 </td>
-   <td style="text-align:right;"> 6777.00 </td>
-   <td style="text-align:right;"> 7290.5249 </td>
-   <td style="text-align:right;"> 4536.75600 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 353538.0 </td>
-   <td style="text-align:right;"> 353538.0 </td>
-   <td style="text-align:right;"> 14.193906 </td>
-   <td style="text-align:right;"> 338.41505 </td>
-   <td style="text-align:right;"> 172.39655 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> upfront_price </td>
-   <td style="text-align:right;"> 5 </td>
-   <td style="text-align:right;"> 2946 </td>
-   <td style="text-align:right;"> 3730.914 </td>
-   <td style="text-align:right;"> 17689.9578 </td>
-   <td style="text-align:right;"> 6.40 </td>
-   <td style="text-align:right;"> 1227.9482 </td>
-   <td style="text-align:right;"> 4.44780 </td>
-   <td style="text-align:right;"> 2 </td>
-   <td style="text-align:right;"> 595000.0 </td>
-   <td style="text-align:right;"> 594998.0 </td>
-   <td style="text-align:right;"> 22.147102 </td>
-   <td style="text-align:right;"> 629.97564 </td>
-   <td style="text-align:right;"> 325.91956 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> metered_price </td>
-   <td style="text-align:right;"> 6 </td>
-   <td style="text-align:right;"> 4147 </td>
-   <td style="text-align:right;"> 7019.153 </td>
-   <td style="text-align:right;"> 14501.7689 </td>
-   <td style="text-align:right;"> 10.78 </td>
-   <td style="text-align:right;"> 3786.5616 </td>
-   <td style="text-align:right;"> 11.53463 </td>
-   <td style="text-align:right;"> 2 </td>
-   <td style="text-align:right;"> 194483.5 </td>
-   <td style="text-align:right;"> 194481.5 </td>
-   <td style="text-align:right;"> 4.507308 </td>
-   <td style="text-align:right;"> 30.84461 </td>
-   <td style="text-align:right;"> 225.19252 </td>
-  </tr>
+<tr>
+<td style="text-align:left;">
+duration
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+4166
+</td>
+<td style="text-align:right;">
+1488.744
+</td>
+<td style="text-align:right;">
+1586.8351
+</td>
+<td style="text-align:right;">
+1019.50
+</td>
+<td style="text-align:right;">
+1200.3677
+</td>
+<td style="text-align:right;">
+773.17590
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+22402.0
+</td>
+<td style="text-align:right;">
+22402.0
+</td>
+<td style="text-align:right;">
+3.848786
+</td>
+<td style="text-align:right;">
+26.62599
+</td>
+<td style="text-align:right;">
+24.58511
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+distance
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+4166
+</td>
+<td style="text-align:right;">
+9482.639
+</td>
+<td style="text-align:right;">
+10763.0546
+</td>
+<td style="text-align:right;">
+6918.50
+</td>
+<td style="text-align:right;">
+7720.7975
+</td>
+<td style="text-align:right;">
+5584.95420
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+233190.0
+</td>
+<td style="text-align:right;">
+233190.0
+</td>
+<td style="text-align:right;">
+5.948785
+</td>
+<td style="text-align:right;">
+76.25401
+</td>
+<td style="text-align:right;">
+166.75386
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+predicted_duration
+</td>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+4147
+</td>
+<td style="text-align:right;">
+1082.257
+</td>
+<td style="text-align:right;">
+816.1494
+</td>
+<td style="text-align:right;">
+916.00
+</td>
+<td style="text-align:right;">
+981.6755
+</td>
+<td style="text-align:right;">
+548.56200
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+20992.0
+</td>
+<td style="text-align:right;">
+20992.0
+</td>
+<td style="text-align:right;">
+7.586889
+</td>
+<td style="text-align:right;">
+143.86503
+</td>
+<td style="text-align:right;">
+12.67368
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+predicted_distance
+</td>
+<td style="text-align:right;">
+4
+</td>
+<td style="text-align:right;">
+4147
+</td>
+<td style="text-align:right;">
+8758.413
+</td>
+<td style="text-align:right;">
+11101.8562
+</td>
+<td style="text-align:right;">
+6777.00
+</td>
+<td style="text-align:right;">
+7290.5249
+</td>
+<td style="text-align:right;">
+4536.75600
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+353538.0
+</td>
+<td style="text-align:right;">
+353538.0
+</td>
+<td style="text-align:right;">
+14.193906
+</td>
+<td style="text-align:right;">
+338.41505
+</td>
+<td style="text-align:right;">
+172.39655
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+upfront_price
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+2946
+</td>
+<td style="text-align:right;">
+3730.914
+</td>
+<td style="text-align:right;">
+17689.9578
+</td>
+<td style="text-align:right;">
+6.40
+</td>
+<td style="text-align:right;">
+1227.9482
+</td>
+<td style="text-align:right;">
+4.44780
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+595000.0
+</td>
+<td style="text-align:right;">
+594998.0
+</td>
+<td style="text-align:right;">
+22.147102
+</td>
+<td style="text-align:right;">
+629.97564
+</td>
+<td style="text-align:right;">
+325.91956
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+metered_price
+</td>
+<td style="text-align:right;">
+6
+</td>
+<td style="text-align:right;">
+4147
+</td>
+<td style="text-align:right;">
+7019.153
+</td>
+<td style="text-align:right;">
+14501.7689
+</td>
+<td style="text-align:right;">
+10.78
+</td>
+<td style="text-align:right;">
+3786.5616
+</td>
+<td style="text-align:right;">
+11.53463
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+194483.5
+</td>
+<td style="text-align:right;">
+194481.5
+</td>
+<td style="text-align:right;">
+4.507308
+</td>
+<td style="text-align:right;">
+30.84461
+</td>
+<td style="text-align:right;">
+225.19252
+</td>
+</tr>
 </tbody>
 </table>
 
 ### EU orders split
 
-The dataset observations are not solely from European countries, there seems to be countries outside Europe as well. The data's variance might not be impacted on duration and distance, but it will impact on price.
+The dataset observations are not solely from European countries, there
+seems to be countries outside Europe as well. The data’s variance might
+not be impacted on duration and distance, but it will impact on price.
 
-The below split is the distribution of EU observations vs. Non-EU.
+The below split is the distribution of EU observations vs. Non-EU.
 
-
-```r
+``` r
 df %>% 
   group_by(eu_indicator) %>% 
   summarise(count = n()) %>% 
@@ -333,23 +565,23 @@ df %>%
            position = "outside")
 ```
 
-```{=html}
-<div id="htmlwidget-4f42c3da59e0bd9f260e" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
-<script type="application/json" data-for="htmlwidget-4f42c3da59e0bd9f260e">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Non-EU","icon":"circle"},{"name":"EU","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#e3fded","#f8afa8"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1682,"name":"Non-EU"},{"value":2484,"name":"EU"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"EU Countries vs Non-EU"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
-```
+    ## PhantomJS not found. You can install it with webshot::install_phantomjs(). If it is installed, please make sure the phantomjs executable can be found via the PATH variable.
+
+<div id="htmlwidget-c8beed4103e6972999d7" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
+<script type="application/json" data-for="htmlwidget-c8beed4103e6972999d7">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Non-EU","icon":"circle"},{"name":"EU","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#e3fded","#f8afa8"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1682,"name":"Non-EU"},{"value":2484,"name":"EU"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"EU Countries vs Non-EU"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
 
 ### Distances
 
-#### Distance metered distribution {.tabset}
+#### Distance metered distribution
 
-The below two tables show the whole metered distance and the distance less than 60 km
+The below two tables show the whole metered distance and the distance
+less than 60 km
 
 ##### Whole distance
 
 The metered distance is right skewed along with a 2xx km.
 
-
-```r
+``` r
 ggplot(data = df, aes(x = distance/1000)) +
   geom_histogram(bins=100, fill='#e3fded', color = 'black') +
   labs(title = "Whole metered distance distribution in 10 Kms",
@@ -359,14 +591,14 @@ ggplot(data = df, aes(x = distance/1000)) +
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/whole metered dist-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/whole%20metered%20dist-1.png)<!-- -->
 
-##### Distance < 60Km
+##### Distance \< 60Km
 
-The metered distance up to 60km, you can see that most of the rides range from 2 km to 20km.
+The metered distance up to 60km, you can see that most of the rides
+range from 2 km to 20km.
 
-
-```r
+``` r
 df %>% 
   filter(distance <= 60000) %>% 
   ggplot(data = ., aes(x = distance/1000)) +
@@ -385,18 +617,18 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5), panel.grid.minor = element_blank())
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/crop metered dist-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/crop%20metered%20dist-1.png)<!-- -->
 
-#### Distance predicted distribution {.tabset}
+#### Distance predicted distribution
 
-The below two tables show the whole predicted distance and the distance less than 60 km
+The below two tables show the whole predicted distance and the distance
+less than 60 km
 
 ##### Whole distance
 
 Predicted distance looks more skewed compared to metered distance.
 
-
-```r
+``` r
 ggplot(data = df, aes(x = predicted_distance/1000)) +
   geom_histogram(bins=100, fill='#e3fded', color = 'black') +
   labs(title = "Whole predicted distance distribution in 10 Kms",
@@ -407,14 +639,14 @@ ggplot(data = df, aes(x = predicted_distance/1000)) +
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/whole predicted dist-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/whole%20predicted%20dist-1.png)<!-- -->
 
 ##### Distance \< 60Km
 
-The predicted distance distribution looks bit similar the metered, however, there are less 0 distances here.
+The predicted distance distribution looks bit similar the metered,
+however, there are less 0 distances here.
 
-
-```r
+``` r
 df %>% 
   filter(predicted_distance <= 60000) %>% 
   ggplot(data = ., aes(x = predicted_distance/1000)) +
@@ -433,18 +665,18 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5), panel.grid.minor = element_blank())
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/crop predicted dist-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/crop%20predicted%20dist-1.png)<!-- -->
 
 ### Durations
 
-#### Duration metered distribution {.tabset}
+#### Duration metered distribution
 
-Most rides are less than two hours, plot is right skewed as well and most rides range from 10 - 20 mins.
+Most rides are less than two hours, plot is right skewed as well and
+most rides range from 10 - 20 mins.
 
 ##### Whole durations (hrs)
 
-
-```r
+``` r
 ggplot(data = df, aes(x = duration/60/60)) +
   geom_histogram(bins=6*4, fill='#e3fded', color = 'black') +
   scale_x_continuous(breaks = seq(0,6,1)) +
@@ -455,12 +687,11 @@ ggplot(data = df, aes(x = duration/60/60)) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/whole metered duration-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/whole%20metered%20duration-1.png)<!-- -->
 
 ##### Whole durations (mins)
 
-
-```r
+``` r
 df %>% 
   mutate(duration_hr = duration/60/60) %>% 
   filter(duration_hr <= 4) %>% 
@@ -480,16 +711,16 @@ df %>%
   scale_y_continuous(breaks = seq(0,400,50))
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/crop metered duration-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/crop%20metered%20duration-1.png)<!-- -->
 
-#### Duration predicted distribution {.tabset}
+#### Duration predicted distribution
 
-The predicted duration looks less than the actual, sounds like this is an under prediction.
+The predicted duration looks less than the actual, sounds like this is
+an under prediction.
 
 ##### Whole durations (hrs)
 
-
-```r
+``` r
 ggplot(data = df, aes(x = predicted_duration/60/60)) +
   geom_histogram(bins=6*4, fill='#e3fded', color = 'black') +
   scale_x_continuous(breaks = seq(0,6,1)) +
@@ -500,12 +731,11 @@ ggplot(data = df, aes(x = predicted_duration/60/60)) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/whole predicted duration-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/whole%20predicted%20duration-1.png)<!-- -->
 
 ##### Whole durations (mins)
 
-
-```r
+``` r
 df %>% 
   mutate(duration_hr = predicted_duration/60/60) %>% 
   filter(duration_hr <= 4) %>% 
@@ -525,14 +755,13 @@ df %>%
   scale_y_continuous(breaks = seq(0,400,50))
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/crop predicted duration-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/crop%20predicted%20duration-1.png)<!-- -->
 
 ### Price metered
 
-I've split by EU/Non-EU due to the currency differences.
+I’ve split by EU/Non-EU due to the currency differences.
 
-
-```r
+``` r
 df %>% 
   mutate(distance = metered_price,
          eu_indicator = if_else(eu_indicator == 1,"EU","Non-EU")) %>% 
@@ -546,18 +775,20 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5), panel.grid.minor = element_blank()) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-2-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
-### Daily Upfront price vs. Metered price ECDF
+### Daily Upfront price vs. Metered price ECDF
 
-This is an Empirical cumulative density function plot, what it tries to show are the percentile of the both the metered and upfront prices.
+This is an Empirical cumulative density function plot, what it tries to
+show are the percentile of the both the metered and upfront prices.
 
-For example, in EU, we can see that 50% of the data early 300s euros for the upfront price and early 400s for the metered price.
+For example, in EU, we can see that 50% of the data early 300s euros for
+the upfront price and early 400s for the metered price.
 
-**Note:** This plot is an aggregation of **daily** prices which is why it looks smoothed, plotting singular prices produces a noisy chart.
+**Note:** This plot is an aggregation of **daily** prices which is why
+it looks smoothed, plotting singular prices produces a noisy chart.
 
-
-```r
+``` r
 df %>% 
   mutate(eu_indicator = if_else(eu_indicator == 1,"EU","Non-EU")) %>% 
   mutate(ride_date = as.Date(calc_created, "%Y-%m-%d"),
@@ -582,16 +813,15 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5), panel.grid.minor = element_blank())
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/prices ecdf-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/prices%20ecdf-1.png)<!-- -->
 
-### Rides demand {.tabset}
+### Rides demand
 
 #### Days
 
 Notice the dips, there is a seasonality during mid-week.
 
-
-```r
+``` r
 df %>% 
   mutate(eu_indicator = if_else(eu_indicator == 1,"EU","Non-EU")) %>% 
   mutate(ride_date = as.Date(calc_created, "%Y-%m-%d"),
@@ -613,14 +843,14 @@ df %>%
         axis.text.x = element_text(angle = 90)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 #### Weekdays
 
-This plot confirms that the demand is less mid week, specifically **Tuesdays**.
+This plot confirms that the demand is less mid week, specifically
+**Tuesdays**.
 
-
-```r
+``` r
 df %>% 
   mutate(ride_date = as.Date(calc_created, "%Y-%m-%d"),
          ride_time = format(as.POSIXlt(calc_created), "%H:%M:%S"),
@@ -651,16 +881,16 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 #### Peak hours
 
 Notice across two markets, EU/Non-EU there is different seasonality.
 
-In EU, there is a up-and-down fluctuation, however, in EU there is an increase up until 8 pm o'clock.
+In EU, there is a up-and-down fluctuation, however, in EU there is an
+increase up until 8 pm o’clock.
 
-
-```r
+``` r
 df =
   df %>% 
   mutate(ride_hour = format(as.POSIXlt(calc_created), "%H"),
@@ -719,16 +949,15 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5), panel.grid.minor = element_blank())
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/peak house-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/peak%20house-1.png)<!-- -->
 
-### Univarite miscellaneous {.tabset}
+### Univarite miscellaneous
 
 #### GPS confidence
 
 Only 18% of the data has GPS that is not confident.
 
-
-```r
+``` r
 df %>% 
   group_by(gps_confidence) %>% 
   summarise(count = n()) %>% 
@@ -750,10 +979,8 @@ df %>%
            position = "outside")
 ```
 
-```{=html}
-<div id="htmlwidget-a539e3278948be2f7872" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
-<script type="application/json" data-for="htmlwidget-a539e3278948be2f7872">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Non-Confident","icon":"circle"},{"name":"Confident","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#f8afa8","#e3fded"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":762,"name":"Non-Confident"},{"value":3404,"name":"Confident"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"GPS confidence"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
-```
+<div id="htmlwidget-21109b6b38767d87a619" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
+<script type="application/json" data-for="htmlwidget-21109b6b38767d87a619">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Non-Confident","icon":"circle"},{"name":"Confident","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#f8afa8","#e3fded"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":762,"name":"Non-Confident"},{"value":3404,"name":"Confident"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"GPS confidence"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
 
 #### Ticket creator
 
@@ -761,8 +988,7 @@ df %>%
 
 Only 189 were opened by drivers.
 
-
-```r
+``` r
 df %>% 
   group_by(entered_by) %>% 
   summarise(count = n()) %>% 
@@ -783,15 +1009,12 @@ df %>%
            position = "outside")
 ```
 
-```{=html}
-<div id="htmlwidget-89ffdde83c502c9a1504" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
-<script type="application/json" data-for="htmlwidget-89ffdde83c502c9a1504">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"client","icon":"circle"},{"name":"driver","icon":"circle"},{"name":"reseller","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#e3fded","#f8afa8","#6675ff"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":3972,"name":"client"},{"value":189,"name":"driver"},{"value":5,"name":"reseller"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Ticket creator"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
-```
+<div id="htmlwidget-c299f3d2fbc5908e50b9" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
+<script type="application/json" data-for="htmlwidget-c299f3d2fbc5908e50b9">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"client","icon":"circle"},{"name":"driver","icon":"circle"},{"name":"reseller","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","radius":["40%","60%"],"color":["#e3fded","#f8afa8","#6675ff"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":3972,"name":"client"},{"value":189,"name":"driver"},{"value":5,"name":"reseller"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Ticket creator"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
 
 #### rider version
 
-
-```r
+``` r
 df %>% 
   mutate(rider_app_version = str_sub(rider_app_version,1,6)) %>% 
   mutate(rider_app_version = fct_lump(rider_app_version,10)) %>% 
@@ -808,12 +1031,11 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/rider version-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/rider%20version-1.png)<!-- -->
 
 #### driver versions
 
-
-```r
+``` r
 df %>% 
   mutate(driver_app_version = str_sub(driver_app_version,1,6)) %>% 
   #mutate(driver_app_version = fct_lump(driver_app_version,10)) %>% 
@@ -830,12 +1052,11 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/driver versions-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/driver%20versions-1.png)<!-- -->
 
 #### Cell phone phone_brand distribution
 
-
-```r
+``` r
 df %>% 
   select(device_name) %>%
   distinct_all() %>% 
@@ -865,44 +1086,51 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/cellphone phone_brand-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/cellphone%20phone_brand-1.png)<!-- -->
 
 ## Feature Engineering
 
 **Prices**:
 
--   `price_comparison`: Whether the upfront prices is pricier or cheaper.
--   `price_difference`: Price difference `upfront price` - `metered prcice`.
+-   `price_comparison`: Whether the upfront prices is pricier or
+    cheaper.
+-   `price_difference`: Price difference `upfront price` -
+    `metered prcice`.
 -   `price_diff_pct`: Difference in percentages.
--   `price_used`: If the metered price is 20% more or less than upfront price., use the metered price.
+-   `price_used`: If the metered price is 20% more or less than upfront
+    price., use the metered price.
 
 **Distances:**
 
--   `distance_diff`: Difference between `predicted distance` - `metered distance`
+-   `distance_diff`: Difference between `predicted distance` -
+    `metered distance`
 -   `distance_diff_pct`: Distance percentage differences
--   `distance_tier`: Distance tiers in 5k, i.e. 0-5km, 5-10km, 10-15km etc.
+-   `distance_tier`: Distance tiers in 5k, i.e. 0-5km, 5-10km, 10-15km
+    etc.
 
 **Durations:**
 
--   `duration_diff`: Difference between `predicted duration` - `metered duration`
+-   `duration_diff`: Difference between `predicted duration` -
+    `metered duration`
 -   `duration_diff_pct`: Duration percentage differences
 
 **Dates:**
 
 -   `ride date`: Date of the ride excluding time.
 
--   `ride day`: Day of week / name of the day .. i.e. Sunday, Monday, etc.
+-   `ride day`: Day of week / name of the day .. i.e. Sunday, Monday,
+    etc.
 
 -   `ride time`: Time of the ride excluding date.
 
 -   `ride hour`: Hour of the ride.
 
--   `day part`: Part of the day name as if Early morning, Morning, Afternoon, etc.
+-   `day part`: Part of the day name as if Early morning, Morning,
+    Afternoon, etc.
 
 -   `phone_brand`: Brand of the phone phone device excluding the model.
 
-
-```r
+``` r
 df = 
   df %>% 
   mutate(distance_diff = predicted_distance - distance,
@@ -965,18 +1193,20 @@ df =
 
 ## Bivariate Analysis
 
-Co relation looks linear between actual distance and actual price. There are 0 distances with prices, sounds like there is a constant **base fare**.
+Co relation looks linear between actual distance and actual price. There
+are 0 distances with prices, sounds like there is a constant **base
+fare**.
 
-### Prices corelation with distance {.tabset}
+### Prices corelation with distance
 
-The below is a scatter plot that shows the correlation between prices (metered in green & upfront in purple) and distance.
+The below is a scatter plot that shows the correlation between prices
+(metered in green & upfront in purple) and distance.
 
 The line is a linear regression fitted line based on the metered price.
 
 #### Europe
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 1) %>% 
   {
@@ -996,14 +1226,14 @@ df %>%
   }
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/europe price dist cor-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/europe%20price%20dist%20cor-1.png)<!-- -->
 
 #### Non-European
 
-The metered price here looks as if it is only expensive on short distances.
+The metered price here looks as if it is only expensive on short
+distances.
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 0) %>% 
   {
@@ -1023,22 +1253,20 @@ df %>%
   }
 ```
 
-```
-## `geom_smooth()` using formula 'y ~ x'
-```
+    ## `geom_smooth()` using formula 'y ~ x'
 
-![](Uprfront-Pricing-EDA_files/figure-html/non-european price dist cor-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/non-european%20price%20dist%20cor-1.png)<!-- -->
 
-### Prices corelation with duration {.tabset}
+### Prices corelation with duration
 
-The below is a scatter plot that shows the correlation between prices (metered in green & upfront in purple) and duration.
+The below is a scatter plot that shows the correlation between prices
+(metered in green & upfront in purple) and duration.
 
 The line is a linear regression fitted line based on the metered price.
 
 #### European
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 1) %>% 
   {
@@ -1058,16 +1286,13 @@ df %>%
   }
 ```
 
-```
-## `geom_smooth()` using formula 'y ~ x'
-```
+    ## `geom_smooth()` using formula 'y ~ x'
 
-![](Uprfront-Pricing-EDA_files/figure-html/europe price du cor-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/europe%20price%20du%20cor-1.png)<!-- -->
 
 #### Non-European
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 0) %>% 
   {
@@ -1087,18 +1312,19 @@ df %>%
   }
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/non-european price dur cor-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/non-european%20price%20dur%20cor-1.png)<!-- -->
 
 ### Durations differences
 
-The below is a binned area plots that compare the distribution of duration in minutes.
+The below is a binned area plots that compare the distribution of
+duration in minutes.
 
 The European market have a close distribution.
 
-While the Non-European, You can notice that the metered duration is a long tailed which makes sense while the predicted isn't.
+While the Non-European, You can notice that the metered duration is a
+long tailed which makes sense while the predicted isn’t.
 
-
-```r
+``` r
 df %>% 
   select(contains("duration"), eu_indicator) %>%
   filter(across(.cols = everything(),
@@ -1126,14 +1352,14 @@ df %>%
   facet_wrap(~ eu_indicator, ncol = 1)
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/duration differences-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/duration%20differences-1.png)<!-- -->
 
 ### Distance differences
 
-When it comes to distances, we have the Non-Eu distribution having predictions under 30 KMs.
+When it comes to distances, we have the Non-Eu distribution having
+predictions under 30 KMs.
 
-
-```r
+``` r
 df %>% 
   select(contains("distance"), eu_indicator, -distance_tier) %>% 
   filter(across(.cols = everything(),
@@ -1161,22 +1387,26 @@ df %>%
   facet_wrap(~ eu_indicator, ncol=1)
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/distance differences-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/distance%20differences-1.png)<!-- -->
 
 ## Price profatibility
 
-### Upfront vs. Actual price cost
+### Upfront vs. Actual price cost
 
-This pie shows whether the Upfront price is cheaper or pricier to the metered price.
+This pie shows whether the Upfront price is cheaper or pricier to the
+metered price.
 
-**29%** of the upfront predicted price is more expensive than the metered price. **44%** of the upfront predicted price is cheaper than the metered price.
+**29%** of the upfront predicted price is more expensive than the
+metered price. **44%** of the upfront predicted price is cheaper than
+the metered price.
 
 This means our predicted price is not doing good.
 
-We can call this a **Type I - Error** which is the worst .. having predicted a cheap price when in fact it should be more expensive, meaning we're having a loss.
+We can call this a **Type I - Error** which is the worst .. having
+predicted a cheap price when in fact it should be more expensive,
+meaning we’re having a loss.
 
-
-```r
+``` r
 df %>% 
   group_by(price_comparison) %>% 
   summarise(count = n()) %>% 
@@ -1198,19 +1428,18 @@ df %>%
            position = "outside")
 ```
 
-```{=html}
-<div id="htmlwidget-c810748a07eda16ddc39" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
-<script type="application/json" data-for="htmlwidget-c810748a07eda16ddc39">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Cheaper","icon":"circle"},{"name":"Pricier","icon":"circle"},{"name":"NULL","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","roseType":"radius","color":["#f8afa8","#e3fded","#FDF5E6"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1860,"name":"Cheaper"},{"value":1086,"name":"Pricier"},{"value":1220,"name":"NULL"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Upfront vs. Actual price"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
-```
+<div id="htmlwidget-65cd13116f1f77e1bc41" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
+<script type="application/json" data-for="htmlwidget-65cd13116f1f77e1bc41">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"Cheaper","icon":"circle"},{"name":"Pricier","icon":"circle"},{"name":"NULL","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","roseType":"radius","color":["#f8afa8","#e3fded","#FDF5E6"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1860,"name":"Cheaper"},{"value":1086,"name":"Pricier"},{"value":1220,"name":"NULL"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Upfront vs. Actual price"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
 
 ### Price used
 
-As per the documentation, the App only switches if there is a 20% more or less than the metered price.
+As per the documentation, the App only switches if there is a 20% more
+or less than the metered price.
 
-The below shows the count and percentages of whether the metered or the upfront was used.
+The below shows the count and percentages of whether the metered or the
+upfront was used.
 
-
-```r
+``` r
 df %>% 
   group_by(price_used) %>% 
   summarise(count = n()) %>% 
@@ -1231,21 +1460,21 @@ df %>%
            position = "outside")
 ```
 
-```{=html}
-<div id="htmlwidget-cc20c9583c641fc332f1" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
-<script type="application/json" data-for="htmlwidget-cc20c9583c641fc332f1">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"metered","icon":"circle"},{"name":"Null","icon":"circle"},{"name":"upfront","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","roseType":"radius","color":["#f8afa8","#FDF5E6","#e3fded"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1339,"name":"metered"},{"value":1220,"name":"Null"},{"value":1607,"name":"upfront"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Upfront vs. Actual price used"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
-```
+<div id="htmlwidget-1eb305ecc583b81237b0" style="width:100%;height:500px;" class="echarts4r html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1eb305ecc583b81237b0">{"x":{"theme":"","tl":false,"draw":true,"renderer":"canvas","events":[],"buttons":[],"opts":{"legend":{"data":[{"name":"metered","icon":"circle"},{"name":"Null","icon":"circle"},{"name":"upfront","icon":"circle"}],"show":true,"type":"plain","name":{},"textStyle":{"fontSize":14},"orient":"vertical","right":"10","top":"10","tooltip":{"show":true,"position":"right"}},"series":[{"name":"count","type":"pie","roseType":"radius","color":["#f8afa8","#FDF5E6","#e3fded"],"itemStyle":{"borderWidth":1,"borderColor":"rgba(0, 0, 0, 1)"},"data":[{"value":1339,"name":"metered"},{"value":1220,"name":"Null"},{"value":1607,"name":"upfront"}],"label":{"show":true,"position":"outside","formatter":"{c} \n {d}%"}}],"title":[{"left":"center","text":"Upfront vs. Actual price used"}]},"dispose":true},"evals":[],"jsHooks":[]}</script>
 
-### Upfront metered price percentage differences {.tabset}
+### Upfront metered price percentage differences
 
-You can see in the below two tabs that the upfront price under performs by predicting cheaper prices due to the lower predicitions of duration/distances.
+You can see in the below two tabs that the upfront price under performs
+by predicting cheaper prices due to the lower predicitions of
+duration/distances.
 
-In the Non European market, the cheaper tail is longer, meaning there are more negative/cheaper differences.
+In the Non European market, the cheaper tail is longer, meaning there
+are more negative/cheaper differences.
 
 #### European
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 1, metered_price < 50) %>% 
   select(contains('price')) %>% 
@@ -1261,12 +1490,11 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 #### Non-European
 
-
-```r
+``` r
 df %>% 
   filter(eu_indicator == 0) %>% 
   select(contains('price')) %>% 
@@ -1282,11 +1510,12 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
-### Prediction difference {.tabset}
+### Prediction difference
 
-Digging deeper, since the predicted prices is dependent on predicted duration and predicted distance, let's see:
+Digging deeper, since the predicted prices is dependent on predicted
+duration and predicted distance, let’s see:
 
 1- The duration percentage differences
 
@@ -1294,14 +1523,16 @@ Digging deeper, since the predicted prices is dependent on predicted duration an
 
 for both EU/Non-EU.
 
-Looking at both variables (Distance & Duration) We can see that the duration is much worse when it comes to prediction having more differences, especially for the Non-European market.
+Looking at both variables (Distance & Duration) We can see that the
+duration is much worse when it comes to prediction having more
+differences, especially for the Non-European market.
 
-The distance in the 2nd tab has more negatives than positives as well, but the Non-EU is a bit close to the EU.
+The distance in the 2nd tab has more negatives than positives as well,
+but the Non-EU is a bit close to the EU.
 
 #### Duration
 
-
-```r
+``` r
 duration.eu.plt <-
   df %>% 
   filter(eu_indicator == 1) %>% 
@@ -1353,12 +1584,11 @@ g2 <- ggplotGrob(duration.noneu.plt)
 gridExtra::grid.arrange(g1, g2,nrow = 1, layout_matrix = layout)
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 #### Distance
 
-
-```r
+``` r
 distance.eu.plt <-
   df %>% 
   filter(eu_indicator == 1) %>% 
@@ -1411,27 +1641,29 @@ g4 <- ggplotGrob(distance.noneu.plt)
 gridExtra::grid.arrange(g3, g4, nrow = 1, layout_matrix = layout)
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/predicted duration-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/predicted%20duration-1.png)<!-- -->
 
 ## Analytical Questions
 
-The question is when can we say the Upfront price is not performing well?
+The question is when can we say the Upfront price is not performing
+well?
 
-I'd say when:
+I’d say when:
 
 1.  We **switch** from upfront to metered.
 2.  When it is more expensive and/or more importantly **cheaper**.
 
-#### Q1 - Is there a specific distance tier where we have price switches or is cheaper? {.tabset}
+#### Q1 - Is there a specific distance tier where we have price switches or is cheaper?
 
-We can that the price tends to be cheaper when it comes to higher distances.
+We can that the price tends to be cheaper when it comes to higher
+distances.
 
-In the 2nd tab, When it comes to which price is used, there is no specific pattern.
+In the 2nd tab, When it comes to which price is used, there is no
+specific pattern.
 
 ##### Switch metric
 
-
-```r
+``` r
 df %>% 
   select(distance_tier, price_comparison) %>% 
   group_by(distance_tier, price_comparison) %>% 
@@ -1461,12 +1693,11 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/Q1 A-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/Q1%20A-1.png)<!-- -->
 
 ##### Price metric
 
-
-```r
+``` r
 df %>% 
   select(distance_tier, price_used) %>% 
   filter(price_used != "Null") %>% 
@@ -1497,14 +1728,14 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/Q1 B-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/Q1%20B-1.png)<!-- -->
 
 #### Q2 - Is there a specific day part where we have prices switches or is cheaper?
 
-There is no pattern related to which part of the day when it comes to a cheaper upfront price.
+There is no pattern related to which part of the day when it comes to a
+cheaper upfront price.
 
-
-```r
+``` r
 df %>% 
   select(day_part, price_comparison) %>% 
   group_by(day_part, price_comparison) %>% 
@@ -1534,16 +1765,17 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/Q2 A-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/Q2%20A-1.png)<!-- -->
 
 #### Q3 - Is there a day of a week where we have price switches?
 
-In this plot, we can see that the upfront is used mostly on Saturday followed by Sunday, this means it is more accurate within the \|20%\|.
+In this plot, we can see that the upfront is used mostly on Saturday
+followed by Sunday, this means it is more accurate within the \|20%\|.
 
-I belive this is due to a less traffic, and hence a more **accurate predicted duration.**
+I belive this is due to a less traffic, and hence a more **accurate
+predicted duration.**
 
-
-```r
+``` r
 df %>% 
   select(ride_day, price_used, upfront_price) %>%
   drop_na(upfront_price) %>% 
@@ -1566,18 +1798,16 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
-
-
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 #### Q4 - How does destination changes impact predicted distance and duration
 
-We can see here the more the destination the changes, the more the distance/duration is less accurate.
+We can see here the more the destination the changes, the more the
+distance/duration is less accurate.
 
 This is notice more significantly in the duration (purple line).
 
-
-```r
+``` r
 df %>% 
   filter(dest_change_number > 1 & dest_change_number < 6) %>% 
   select(dest_change_number, price_diff_pct, price_comparison, distance_diff, duration_diff) %>%
@@ -1602,14 +1832,15 @@ df %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
-![](Uprfront-Pricing-EDA_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
+![](Uprfront-Pricing-EDA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 #### Q5 - Is there a specific cell phone phone brand that impact switches?
 
-Looking at the table, the highest gps with no confidence is Tecno with 312 observation, however Tecno raked the 3rd for GPS with confidence .. so there is no pattern.
+Looking at the table, the highest gps with no confidence is Tecno with
+312 observation, however Tecno raked the 3rd for GPS with confidence ..
+so there is no pattern.
 
-
-```r
+``` r
 df %>% 
   select(phone_brand, gps_confidence) %>% 
   group_by(phone_brand,gps_confidence) %>% 
@@ -1620,94 +1851,191 @@ df %>%
   kable_minimal()
 ```
 
-<table class=" lightable-minimal" style='font-family: "Trebuchet MS", verdana, sans-serif; margin-left: auto; margin-right: auto;'>
- <thead>
-  <tr>
-   <th style="text-align:left;"> phone_brand </th>
-   <th style="text-align:right;"> gps_confidence </th>
-   <th style="text-align:right;"> count </th>
-  </tr>
- </thead>
+<table class=" lightable-minimal" style="font-family: &quot;Trebuchet MS&quot;, verdana, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+phone_brand
+</th>
+<th style="text-align:right;">
+gps_confidence
+</th>
+<th style="text-align:right;">
+count
+</th>
+</tr>
+</thead>
 <tbody>
-  <tr>
-   <td style="text-align:left;"> samsung </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 1304 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> huawei </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 601 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> tecno </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 406 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> iphone </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 340 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> tecno </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 312 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> xiaomi </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 212 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> samsung </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 152 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> infinix </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 132 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> hmd </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 119 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> infinix </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 76 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> itel </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 59 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> hmd </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 47 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> huawei </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 41 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> itel </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 39 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> sony </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 34 </td>
-  </tr>
+<tr>
+<td style="text-align:left;">
+samsung
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+1304
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+huawei
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+601
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+tecno
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+406
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+iphone
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+340
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+tecno
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+312
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+xiaomi
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+212
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+samsung
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+152
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+infinix
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+132
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+hmd
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+119
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+infinix
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+76
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+itel
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+59
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+hmd
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+47
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+huawei
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+41
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+itel
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+39
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+sony
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+34
+</td>
+</tr>
 </tbody>
 </table>
 
-Do linear regression (parameters, 2 params (predicted distance / predicted time)) compare y with metered price
+Do linear regression (parameters, 2 params (predicted distance /
+predicted time)) compare y with metered price
 
 # CDA - Confirmatory data analysis
 
@@ -1715,10 +2043,11 @@ The aim of the CDA is to confirm the hypothesis, that is
 
 ## Machine Learning (python)
 
-I'll use a package in R called `reticulate` [see link](https://rstudio.github.io/reticulate/) .. I'll set my python 3.10 directly without using conda/venv.
+I’ll use a package in R called `reticulate` [see
+link](https://rstudio.github.io/reticulate/) .. I’ll set my python 3.10
+directly without using conda/venv.
 
-
-```r
+``` r
 library(reticulate)
 Sys.setenv(RETICULATE_PYTHON = r"(C:\Users\Sayyad\AppData\Local\Programs\Python\Python310\python.exe)")
 use_python(r"(C:\Users\Sayyad\AppData\Local\Programs\Python\Python310\python.exe)", required = TRUE)
@@ -1727,8 +2056,7 @@ invisible(py_config())
 
 Importing required python libraries.
 
-
-```python
+``` python
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1738,7 +2066,8 @@ from sklearn.linear_model import LinearRegression
 
 ### Preparing data for regression
 
-I'll ingest the data with the features engineered and prepare it using python for a **linear regression**
+I’ll ingest the data with the features engineered and prepare it using
+python for a **linear regression**
 
 #### Selecting data features
 
@@ -1749,9 +2078,7 @@ I will use the following features to predict the **upfront** price.
 -   `gps_confidence`
 -   `eu_indicator`
 
-
-```python
-
+``` python
 # Import sklearn.preprocessing.StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
@@ -1773,11 +2100,16 @@ df = df[features]
 
 #### Numerical log transformation
 
-For highly-skewed feature distributions, it is common practice to apply a logarithmic transformation on the data so that the very large and very small values do not negatively affect the performance of a learning algorithm. Using a logarithmic transformation significantly reduces the range of values caused by outliers. Care must be taken when applying this transformation however: The logarithm of 0 is undefined, so we must translate the values by a small amount above 0 to apply the the logarithm successfully.
+For highly-skewed feature distributions, it is common practice to apply
+a logarithmic transformation on the data so that the very large and very
+small values do not negatively affect the performance of a learning
+algorithm. Using a logarithmic transformation significantly reduces the
+range of values caused by outliers. Care must be taken when applying
+this transformation however: The logarithm of 0 is undefined, so we must
+translate the values by a small amount above 0 to apply the the
+logarithm successfully.
 
-
-```python
-
+``` python
 # Skewed - Log transformation #
 #-------------------------------#
 
@@ -1789,15 +2121,22 @@ features_log_transformed[skewed] = features_log_transformed[skewed].apply(lambda
 
 #### Scaling numerics (MniMax)
 
-In addition to performing transformations on features that are highly skewed, it is often good practice to perform some type of scaling on numerical features. Applying a scaling to the data does not change the shape of each feature's distribution; however, normalization ensures that each feature is treated equally when applying supervised learners. Note that once scaling is applied, observing the data in its raw form will no longer have the same original meaning.
+In addition to performing transformations on features that are highly
+skewed, it is often good practice to perform some type of scaling on
+numerical features. Applying a scaling to the data does not change the
+shape of each feature’s distribution; however, normalization ensures
+that each feature is treated equally when applying supervised learners.
+Note that once scaling is applied, observing the data in its raw form
+will no longer have the same original meaning.
 
-The drop down is that we won't be able to uncover the factor of duration and distance, which can help me deduce the country. Reverse engineering can be done, but it will take time.
+The drop down is that we won’t be able to uncover the factor of duration
+and distance, which can help me deduce the country. Reverse engineering
+can be done, but it will take time.
 
-**Note** I have scaled the target response variable using both log and MinMax scalar.
+**Note** I have scaled the target response variable using both log and
+MinMax scalar.
 
-
-```python
-
+``` python
 # Initialize a scaler, then apply it to the features
 scaler = MinMaxScaler() # default=(0, 1)
 numerical = features[0:4]
@@ -1811,11 +2150,17 @@ features_log_minmax_transform[numerical] = scaler.fit_transform(features_log_tra
 
 #### One-hot encoding
 
-Learning algorithms expect input to be numeric, which requires that non-numeric features (called categorical variables) be converted. One popular way to convert categorical variables is by using the one-hot encoding scheme. One-hot encoding creates a "dummy" variable for each possible category of each non-numeric feature. For example, assume some Feature has three possible entries: A, B, or C. We then encode this feature into someFeature_A, someFeature_B and someFeature_C. Each feature column will have 0 or 1 stating whether that feature is present in the observation or not.
+Learning algorithms expect input to be numeric, which requires that
+non-numeric features (called categorical variables) be converted. One
+popular way to convert categorical variables is by using the one-hot
+encoding scheme. One-hot encoding creates a “dummy” variable for each
+possible category of each non-numeric feature. For example, assume some
+Feature has three possible entries: A, B, or C. We then encode this
+feature into someFeature_A, someFeature_B and someFeature_C. Each
+feature column will have 0 or 1 stating whether that feature is present
+in the observation or not.
 
-
-```python
-
+``` python
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -1831,11 +2176,9 @@ encoded = list(features_final.columns)
 print("{} total features after one-hot encoding.".format(len(encoded)))
 ```
 
-```
-## 8 total features after one-hot encoding.
-```
+    ## 8 total features after one-hot encoding.
 
-```python
+``` python
 actual_price = features_final['metered_price']
 upfront_price = features_final['upfront_price']
 
@@ -1845,15 +2188,14 @@ features_final = features_final.drop('upfront_price', 1)
 
 ### Linear Regression Model
 
-Since there is a correlation between price and duration/distance as prior plots, linear regression sounds promising.
+Since there is a correlation between price and duration/distance as
+prior plots, linear regression sounds promising.
 
 #### Shuffle & Split
 
 Shuffling and splitting data into 30% test and 70 training.
 
-
-```python
-
+``` python
 #features_final_mod = features_final[['predicted_distance','predicted_duration','eu_indicator']]
 #features_final_filtered = features_final.query('eu_indicator == 1')
 
@@ -1867,15 +2209,12 @@ X_train, X_test, y_train, y_test = train_test_split(features_final,
 print("Training features set has {} samples.".format(X_train.shape[0]),"\n","Testing features set has {} samples.".format(X_test.shape[0]),"\n","Training prediction set has {} samples.".format(y_train.shape[0]),"\n","Testing prediction set has {} samples.".format(y_test.shape[0]), sep="")
 ```
 
-```
-## Training features set has 2030 samples.
-## Testing features set has 871 samples.
-## Training prediction set has 2030 samples.
-## Testing prediction set has 871 samples.
-```
+    ## Training features set has 2030 samples.
+    ## Testing features set has 871 samples.
+    ## Training prediction set has 2030 samples.
+    ## Testing prediction set has 871 samples.
 
-
-```python
+``` python
 Below is the data that will be used for the linear regression.
 
 from tabulate import tabulate
@@ -1886,10 +2225,10 @@ print(tabulate(pd.DataFrame(y_train[1:3]), headers='keys', tablefmt='psql'))
 
 #### Linear Regression (Python)
 
-Fitting a linear regression using python `sklearn` library I got a 9x R square accuracy.
+Fitting a linear regression using python `sklearn` library I got a 9x R
+square accuracy.
 
-
-```python
+``` python
 LR = LinearRegression()
 results = LR.fit(X_train, y_train)
 
@@ -1902,12 +2241,15 @@ Prediction R square score: 99.23091519835836
 
 #### Linear Regression (R)
 
-The below is a dataframe that has predicted upfront price based on the predicted distance / predicted duration.
+The below is a dataframe that has predicted upfront price based on the
+predicted distance / predicted duration.
 
-**Hint:** I can use that to impute the 3x% percent missing data of upfront price, using predicted distance / predicted duration and maybe the metered price as a feature as well. But Since we have the predictor done already, I'll drop this part of the sake of time.
+**Hint:** I can use that to impute the 3x% percent missing data of
+upfront price, using predicted distance / predicted duration and maybe
+the metered price as a feature as well. But Since we have the predictor
+done already, I’ll drop this part of the sake of time.
 
-
-```r
+``` r
 ## Python back to R ##
 model_df = py$df_prepared
 features = model_df %>% select(-contains("price"))
@@ -1939,95 +2281,217 @@ price_pred %>%
   kable_paper()
 ```
 
-<table class=" lightable-paper" style='font-family: "Arial Narrow", arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;'>
- <thead>
-  <tr>
-   <th style="text-align:left;">   </th>
-   <th style="text-align:right;"> .pred </th>
-   <th style="text-align:right;"> metered_price </th>
-   <th style="text-align:right;"> upfront_price </th>
-   <th style="text-align:right;"> predicted_distance </th>
-   <th style="text-align:right;"> predicted_duration </th>
-   <th style="text-align:right;"> gps_confidence_no </th>
-   <th style="text-align:right;"> gps_confidence_yes </th>
-   <th style="text-align:right;"> eu_indicator_no </th>
-   <th style="text-align:right;"> eu_indicator_yes </th>
-  </tr>
- </thead>
+<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+.pred
+</th>
+<th style="text-align:right;">
+metered_price
+</th>
+<th style="text-align:right;">
+upfront_price
+</th>
+<th style="text-align:right;">
+predicted_distance
+</th>
+<th style="text-align:right;">
+predicted_duration
+</th>
+<th style="text-align:right;">
+gps_confidence_no
+</th>
+<th style="text-align:right;">
+gps_confidence_yes
+</th>
+<th style="text-align:right;">
+eu_indicator_no
+</th>
+<th style="text-align:right;">
+eu_indicator_yes
+</th>
+</tr>
+</thead>
 <tbody>
-  <tr>
-   <td style="text-align:left;"> 0 </td>
-   <td style="text-align:right;"> 0.0476178 </td>
-   <td style="text-align:right;"> 0.0965967 </td>
-   <td style="text-align:right;"> 0.0496926 </td>
-   <td style="text-align:right;"> 0.5466104 </td>
-   <td style="text-align:right;"> 0.5734852 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> 1 </td>
-   <td style="text-align:right;"> 0.0421748 </td>
-   <td style="text-align:right;"> 0.0142495 </td>
-   <td style="text-align:right;"> 0.0332411 </td>
-   <td style="text-align:right;"> 0.5348105 </td>
-   <td style="text-align:right;"> 0.5646983 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> 5 </td>
-   <td style="text-align:right;"> 0.0822422 </td>
-   <td style="text-align:right;"> 0.0899710 </td>
-   <td style="text-align:right;"> 0.0595142 </td>
-   <td style="text-align:right;"> 0.6249341 </td>
-   <td style="text-align:right;"> 0.6204513 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> 6 </td>
-   <td style="text-align:right;"> 0.1616640 </td>
-   <td style="text-align:right;"> 0.2133405 </td>
-   <td style="text-align:right;"> 0.1825281 </td>
-   <td style="text-align:right;"> 0.7895601 </td>
-   <td style="text-align:right;"> 0.7693425 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> 7 </td>
-   <td style="text-align:right;"> 0.1134277 </td>
-   <td style="text-align:right;"> 0.1394454 </td>
-   <td style="text-align:right;"> 0.0978809 </td>
-   <td style="text-align:right;"> 0.6789394 </td>
-   <td style="text-align:right;"> 0.7080345 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-   <td style="text-align:right;"> 0 </td>
-   <td style="text-align:right;"> 1 </td>
-  </tr>
+<tr>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:right;">
+0.0476178
+</td>
+<td style="text-align:right;">
+0.0965967
+</td>
+<td style="text-align:right;">
+0.0496926
+</td>
+<td style="text-align:right;">
+0.5466104
+</td>
+<td style="text-align:right;">
+0.5734852
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1
+</td>
+<td style="text-align:right;">
+0.0421748
+</td>
+<td style="text-align:right;">
+0.0142495
+</td>
+<td style="text-align:right;">
+0.0332411
+</td>
+<td style="text-align:right;">
+0.5348105
+</td>
+<td style="text-align:right;">
+0.5646983
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+5
+</td>
+<td style="text-align:right;">
+0.0822422
+</td>
+<td style="text-align:right;">
+0.0899710
+</td>
+<td style="text-align:right;">
+0.0595142
+</td>
+<td style="text-align:right;">
+0.6249341
+</td>
+<td style="text-align:right;">
+0.6204513
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+6
+</td>
+<td style="text-align:right;">
+0.1616640
+</td>
+<td style="text-align:right;">
+0.2133405
+</td>
+<td style="text-align:right;">
+0.1825281
+</td>
+<td style="text-align:right;">
+0.7895601
+</td>
+<td style="text-align:right;">
+0.7693425
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+7
+</td>
+<td style="text-align:right;">
+0.1134277
+</td>
+<td style="text-align:right;">
+0.1394454
+</td>
+<td style="text-align:right;">
+0.0978809
+</td>
+<td style="text-align:right;">
+0.6789394
+</td>
+<td style="text-align:right;">
+0.7080345
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0
+</td>
+<td style="text-align:right;">
+1
+</td>
+</tr>
 </tbody>
 </table>
 
-You can see below the summary of the linear regression model. With a method of Root mean square error, we have 99.x R square.
+You can see below the summary of the linear regression model. With a
+method of Root mean square error, we have 99.x R square.
 
 **Extras**
 
--   Some of the things I done in the background, is using log and MinMax transformed values of pred distance duration and it returned 4x% R square value. This is why I transformed the response value.
+-   Some of the things I done in the background, is using log and MinMax
+    transformed values of pred distance duration and it returned 4x% R
+    square value. This is why I transformed the response value.
 
--   I used the predicted distance and predicted duration and metered distance with the metered price, I got 98% R square value.
+-   I used the predicted distance and predicted duration and metered
+    distance with the metered price, I got 98% R square value.
 
-
-```r
+``` r
 options(scipen=999)
 
 ## Model parameters ##
@@ -2036,131 +2500,234 @@ tidy(lm_fit) %>%
   kable_paper()
 ```
 
-<table class=" lightable-paper" style='font-family: "Arial Narrow", arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;'>
- <thead>
-  <tr>
-   <th style="text-align:left;"> term </th>
-   <th style="text-align:right;"> estimate </th>
-   <th style="text-align:right;"> std.error </th>
-   <th style="text-align:right;"> statistic </th>
-   <th style="text-align:right;"> p.value </th>
-  </tr>
- </thead>
+<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+term
+</th>
+<th style="text-align:right;">
+estimate
+</th>
+<th style="text-align:right;">
+std.error
+</th>
+<th style="text-align:right;">
+statistic
+</th>
+<th style="text-align:right;">
+p.value
+</th>
+</tr>
+</thead>
 <tbody>
-  <tr>
-   <td style="text-align:left;"> (Intercept) </td>
-   <td style="text-align:right;"> -0.2265674 </td>
-   <td style="text-align:right;"> 0.0044134 </td>
-   <td style="text-align:right;"> -51.336613 </td>
-   <td style="text-align:right;"> 0.0000000 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featurespredicted_distance </td>
-   <td style="text-align:right;"> 0.3626428 </td>
-   <td style="text-align:right;"> 0.0129135 </td>
-   <td style="text-align:right;"> 28.082552 </td>
-   <td style="text-align:right;"> 0.0000000 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featurespredicted_duration </td>
-   <td style="text-align:right;"> 0.1324548 </td>
-   <td style="text-align:right;"> 0.0155452 </td>
-   <td style="text-align:right;"> 8.520598 </td>
-   <td style="text-align:right;"> 0.0000000 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featuresgps_confidence_no </td>
-   <td style="text-align:right;"> 0.0075881 </td>
-   <td style="text-align:right;"> 0.0015956 </td>
-   <td style="text-align:right;"> 4.755767 </td>
-   <td style="text-align:right;"> 0.0000021 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featuresgps_confidence_yes </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featureseu_indicator_no </td>
-   <td style="text-align:right;"> 0.5895873 </td>
-   <td style="text-align:right;"> 0.0012367 </td>
-   <td style="text-align:right;"> 476.738375 </td>
-   <td style="text-align:right;"> 0.0000000 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> featureseu_indicator_yes </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> NA </td>
-  </tr>
+<tr>
+<td style="text-align:left;">
+(Intercept)
+</td>
+<td style="text-align:right;">
+-0.2265674
+</td>
+<td style="text-align:right;">
+0.0044134
+</td>
+<td style="text-align:right;">
+-51.336613
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featurespredicted_distance
+</td>
+<td style="text-align:right;">
+0.3626428
+</td>
+<td style="text-align:right;">
+0.0129135
+</td>
+<td style="text-align:right;">
+28.082552
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featurespredicted_duration
+</td>
+<td style="text-align:right;">
+0.1324548
+</td>
+<td style="text-align:right;">
+0.0155452
+</td>
+<td style="text-align:right;">
+8.520598
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featuresgps_confidence_no
+</td>
+<td style="text-align:right;">
+0.0075881
+</td>
+<td style="text-align:right;">
+0.0015956
+</td>
+<td style="text-align:right;">
+4.755767
+</td>
+<td style="text-align:right;">
+0.0000021
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featuresgps_confidence_yes
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featureseu_indicator_no
+</td>
+<td style="text-align:right;">
+0.5895873
+</td>
+<td style="text-align:right;">
+0.0012367
+</td>
+<td style="text-align:right;">
+476.738375
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+featureseu_indicator_yes
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+NA
+</td>
+</tr>
 </tbody>
 </table>
 
-```r
+``` r
 ## Root mean square error ##
 
 price_pred %>% 
   rmse(truth = upfront_price, estimate = .pred) 
 ```
 
-```
-## # A tibble: 1 x 3
-##   .metric .estimator .estimate
-##   <chr>   <chr>          <dbl>
-## 1 rmse    standard      0.0228
-```
+    ## # A tibble: 1 x 3
+    ##   .metric .estimator .estimate
+    ##   <chr>   <chr>          <dbl>
+    ## 1 rmse    standard      0.0228
 
 # Conslusion
 
 **Dataset**
 
-- Dataset has around **777** duplicates
-- **~30%** of upfront price is missing.
+-   Dataset has around **777** duplicates
+-   **\~30%** of upfront price is missing.
 
 **Univariate analysis**
 
-- Actual distances are mostly less than 60 km, most of the rides happen up to 10 kms.
-- Actual durations are mostly less than an hour and a half, mostly up to 30 minutes.
-- differences between metered price and upfront price are mostly notable in Non-European market.
+-   Actual distances are mostly less than 60 km, most of the rides
+    happen up to 10 kms.
+-   Actual durations are mostly less than an hour and a half, mostly up
+    to 30 minutes.
+-   differences between metered price and upfront price are mostly
+    notable in Non-European market.
 
 **Demand**
 
-- There is a pattern of dips during mid-weeks, specifically Tuesdays.
-- Hourly patterns seems to be on a positive increase across morning till later afternoon in Non-European countries, whereas in Europe it fluctuates every hour.
+-   There is a pattern of dips during mid-weeks, specifically Tuesdays.
+-   Hourly patterns seems to be on a positive increase across morning
+    till later afternoon in Non-European countries, whereas in Europe it
+    fluctuates every hour.
 
 **Miscellaneous**
 
-- Most of the data has a GPS confidence and there is no specific model impacting GPS confidence.
+-   Most of the data has a GPS confidence and there is no specific model
+    impacting GPS confidence.
 
 **Bivariate Analysis**
 
-- There is a strong correlation between distance and price in European countries for the metered prices. For the upfront, it starts to deviate on higher distances.
-- Duration looks scattered a lot, and when it comes to Non-European market it is the worst of the 4 correlation charts.
+-   There is a strong correlation between distance and price in European
+    countries for the metered prices. For the upfront, it starts to
+    deviate on higher distances.
+-   Duration looks scattered a lot, and when it comes to Non-European
+    market it is the worst of the 4 correlation charts.
 
-**Price Profitability** 
+**Price Profitability**
 
-- The upfront price is under-predicted compare to the metered price with **44%** being cheaper and **26%** Pricier.
-- The upfront price is used mostly (38%) compared to the metered price (32%) based on the |20%| rule.
-- Price percentage differences plot show that the price cheaper top bins are 10% and 20% cheaper. These are after the 0-10% cheaper ones.
-- Butterfly histogram show that the duration difference is mostly in negative (meaning upfront is predicting cheaper prices), especially for non-European market.
+-   The upfront price is under-predicted compare to the metered price
+    with **44%** being cheaper and **26%** Pricier.
+-   The upfront price is used mostly (38%) compared to the metered price
+    (32%) based on the \|20%\| rule.
+-   Price percentage differences plot show that the price cheaper top
+    bins are 10% and 20% cheaper. These are after the 0-10% cheaper
+    ones.
+-   Butterfly histogram show that the duration difference is mostly in
+    negative (meaning upfront is predicting cheaper prices), especially
+    for non-European market.
 
 **Analytical Questions**
 
-- Question 1 show the higher the distance the more likely the upfront model predict cheaper prices.
-- Question 2 shows no specific pattern where we have a certain day period with pricier/cheaper prices.
-- Question 3 shows that weekends have upfront price is used more on weekends. This is mostly likely due to less traffic and hence a better estimation of duration.
-- Question 4 show the more destination changes, the higher the duration/distance difference median.
-- Question 5 shows there is no corelation between phone brand and hps confidence.
+-   Question 1 show the higher the distance the more likely the upfront
+    model predict cheaper prices.
+-   Question 2 shows no specific pattern where we have a certain day
+    period with pricier/cheaper prices.
+-   Question 3 shows that weekends have upfront price is used more on
+    weekends. This is mostly likely due to less traffic and hence a
+    better estimation of duration.
+-   Question 4 show the more destination changes, the higher the
+    duration/distance difference median.
+-   Question 5 shows there is no corelation between phone brand and hps
+    confidence.
 
 **Confirmatory Data Analysis**
 
-Using Machine learning, linear regression, in both Python & R .. Our hypothesis is confirmed that the predicted price is highly impacted by predicted duration and distance.
+Using Machine learning, linear regression, in both Python & R .. Our
+hypothesis is confirmed that the predicted price is highly impacted by
+predicted duration and distance.
 
-In previous attempts, I used other engineered features, like `day part`, `ride hour` and others but they didn't show any significance.
+In previous attempts, I used other engineered features, like `day part`,
+`ride hour` and others but they didn’t show any significance.
 
-Future work could be done like imputing missing upfront data using linear regression, (see predicted dataframe) and finding distance and duration weights hence deducing the cities which could answer more questions.
-
-
+Future work could be done like imputing missing upfront data using
+linear regression, (see predicted dataframe) and finding distance and
+duration weights hence deducing the cities which could answer more
+questions.
